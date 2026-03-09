@@ -1,0 +1,127 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Project PRD",
+  "description": "Project Requirements Document for code generation",
+  "version": "1.0",
+  "app": {
+    "name": "Personal Finance Tracker",
+    "description": "Track income, expenses, and budgets",
+    "type": "personal"
+  },
+  "entities": [
+    {
+      "name": "transaction",
+      "label": "Transaction",
+      "pluralLabel": "Transactions",
+      "icon": "DollarSign",
+      "description": "Financial transaction record",
+      "fields": [
+        {
+          "name": "amount",
+          "type": "decimal",
+          "required": true,
+          "validation": {
+            "min": 0,
+            "precision": 10,
+            "scale": 2
+          },
+          "description": "Transaction amount"
+        },
+        {
+          "name": "description",
+          "type": "text",
+          "required": true,
+          "maxLength": 255,
+          "description": "What the transaction is for"
+        },
+        {
+          "name": "date",
+          "type": "date",
+          "required": true,
+          "description": "When transaction occurred"
+        },
+        {
+          "name": "type",
+          "type": "enum",
+          "values": ["income", "expense"],
+          "required": true,
+          "description": "Transaction type"
+        },
+        {
+          "name": "categoryId",
+          "type": "uuid",
+          "relation": {
+            "entity": "category",
+            "type": "many-to-one",
+            "foreignKey": "category_id"
+          },
+          "required": true,
+          "description": "Category this transaction belongs to"
+        }
+      ]
+    },
+    {
+      "name": "category",
+      "label": "Category",
+      "pluralLabel": "Categories",
+      "icon": "Tag",
+      "description": "Transaction category",
+      "fields": [
+        {
+          "name": "name",
+          "type": "text",
+          "required": true,
+          "maxLength": 100,
+          "description": "Category name"
+        },
+        {
+          "name": "color",
+          "type": "text",
+          "required": false,
+          "maxLength": 7,
+          "description": "Hex color code for UI"
+        }
+      ]
+    },
+    {
+      "name": "budget",
+      "label": "Budget",
+      "pluralLabel": "Budgets",
+      "icon": "Target",
+      "description": "Spending limit for category",
+      "fields": [
+        {
+          "name": "categoryId",
+          "type": "uuid",
+          "relation": {
+            "entity": "category",
+            "type": "many-to-one"
+          },
+          "required": true
+        },
+        {
+          "name": "limit",
+          "type": "decimal",
+          "required": true,
+          "validation": {
+            "min": 0,
+            "precision": 10,
+            "scale": 2
+          }
+        },
+        {
+          "name": "period",
+          "type": "enum",
+          "values": ["monthly", "yearly"],
+          "required": true
+        }
+      ]
+    }
+  ],
+  "features": {
+    "charts": true,
+    "export": false,
+    "notifications": false,
+    "fileUploads": false
+  }
+}

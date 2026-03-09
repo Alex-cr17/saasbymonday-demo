@@ -1,0 +1,360 @@
+You are an AI coding assistant inside Cursor working on a Next.js 15 SaaS boilerplate.
+
+# Response Style (Token Economy)
+- Minimize token usage in all responses
+- Default to shortest answer that solves the task
+- No explanations unless asked
+- Code over natural language
+- Small, focused diffs over rewriting files
+- No comments in code unless asked
+- Pick simplest solution, don't list alternatives
+
+# Project Architecture
+
+## Key Docs
+- `docs/architecture.md` - System layers
+- `docs/app-structure.md` - Directory layout + init flow
+- `docs/api-conventions.md` - API patterns
+- `docs/creating-features.md` - How to add features
+- `docs/project-generation.md` - Generate app from user idea (IMPORTANT!)
+- `docs/design-discovery.md` - Design/UI discovery after functional questions (reference screenshots, style, theme)
+- `docs/invariants.md` - Rules that MUST be followed
+- `README.md` - First-run setup and required environment variables
+
+## First-Run Guard (CRITICAL)
+- If user is using AI for development, ALWAYS verify environment + setup directly in this file.
+- Before any implementation/debugging, ensure:
+  - `npm install` has been run
+  - `.env.local` exists (copy from `.env.example` if needed)
+  - These variables are set in `.env.local`:
+    - `NEXT_PUBLIC_SUPABASE_URL`
+    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+    - `DATABASE_URL`
+  - Database migrations have run: `npm run db:migrate`
+  - Dev server can start: `npm run dev`
+- If any of these are missing, stop coding changes and explicitly guide the user to complete them to avoid confusion.
+
+## Tech Stack
+- Next.js 15 (App Router), React 19, TypeScript
+- Supabase Auth (auth only, NOT for DB queries)
+- PostgreSQL + Drizzle ORM + RLS
+- Tailwind CSS + shadcn/ui
+- React Query (server state) + Zustand (UI state)
+- react-hook-form + Zod (forms)
+
+## Supabase Auth (CRITICAL)
+- ALWAYS use `getUser()` to verify authentication — it contacts Supabase Auth server
+- NEVER trust `getSession()` alone — data comes from cookies and may not be authentic
+- `getSession()` is only for obtaining `access_token` AFTER `getUser()` succeeds
+- `requireUser()` handles this correctly — use it in all protected routes
+
+## Google OAuth (CRITICAL)
+- Google auth is implemented via:
+  1) Client starts OAuth with `supabase.auth.signInWithOAuth({ provider: "google" })`
+  2) Redirect target is `/auth/callback`
+  3) `app/auth/callback/route.ts` exchanges `code` via `exchangeCodeForSession(code)`
+  4) Route redirects to safe internal `next` path or dashboard
+- Keep OAuth callback logic in Route Handlers (server-side), not in Server Components
+- Prevent open redirect: only allow internal relative paths (must start with `/` and not `//`)
+- On callback failure, redirect to `/auth/login` with `oauthError` query param and render friendly error in login UI
+- For OAuth provider errors like `Unsupported provider: provider is not enabled`, guide user to configure Supabase Provider + Google Cloud OAuth credentials
+
+## Database Access Pattern (MANDATORY)
+```
+requireUser() → withAuthDb(jwt) → query(db, tenantId) → response
+```
+- NEVER use Supabase for data queries
+- NEVER pass tenant_id or user_id from client
+- RLS enforces authorization, but queries MUST filter by tenantId
+- Get tenantId from: `await getActiveTenantId()` (server-side cookie)
+
+## API Route Pattern
+```typescript
+export async function GET() {
+  const { user, session } = await requireUser();
+  if (!user || !session) return fail('UNAUTHENTICATED', 'Auth required', 401);
+
+  const data = await withAuthDb(session.access_token, (db) => query(db));
+  return ok(data);
+}
+```
+- Middleware MUST NOT redirect `/api/*` requests to auth pages. API routes enforce auth/signature checks internally.
+
+## New API Route Guard (CRITICAL)
+- When creating a new API route for tenant-scoped data, ALWAYS enforce tenant isolation:
+  `requireUser() -> withAuthDb(session.access_token) -> filter by tenantId from getActiveTenantId()`.
+- NEVER accept `tenant_id` or `user_id` from client payload/query params for authorization decisions.
+- If a new tenant-scoped table/entity is introduced, ALWAYS add or update migration RLS policies using `tenant_id`.
+
+## Creating New Entities
+1. Schema: `lib/db/schema/{entity}.ts` with `tenantId`
+2. Migration: `supabase/migrations/` with RLS policies
+3. Queries: `lib/db/queries/{entity}.ts`
+4. Validation: `lib/validation/{entity}Schemas.ts`
+5. API: `app/api/{entity}/route.ts`
+6. Client: `lib/api/client/{entity}.ts`
+7. Hooks: `hooks/use{Entity}.ts` (React Query)
+8. Components: `components/{entity}/`
+9. Page: `app/(admin)/{entity}/page.tsx`
+
+See docs examples as reference implementation.
+
+## Project Structure
+
+### Utils (`utils/`)
+- `constants.ts` - ToastType, DialogTypes, Roles
+- Routes are in `lib/helpers/routes.ts`
+- `formatters.ts` - Number/date/file formatters, getInitials()
+
+### Types (`types/`)
+- `formatters.ts` - Types for formatter functions
+- UI types (UIUser, UITenant, ToastNotification) → in `store/appStore.ts`
+
+### Lib (`lib/`)
+- `utils.ts` - shadcn `cn()` function (don't move)
+- `api/` - Response helpers, client functions
+- `db/` - Schema, queries, withAuthDb
+- `supabase/` - Auth clients
+- `tenants/` - Tenant utilities
+- `validation/` - Zod schemas
+
+## React Query Keys (IMPORTANT)
+Include `tenantId` in queryKey for tenant-scoped data:
+```typescript
+const entityKeys = {
+  all: (tenantId: string | null) => ['entity', tenantId] as const,
+};
+
+// In hook
+const activeTenant = useAppStore((s) => s.activeTenant);
+return useQuery({
+  queryKey: entityKeys.all(activeTenant?.id ?? null),
+  queryFn: fetchEntities,
+  enabled: !!activeTenant,
+});
+```
+
+# Core Migrations (DO NOT DELETE)
+- `supabase/migrations/0000_quiet_angel.sql` - Core schema + RLS policies + auth trigger
+
+# Email Integration
+- Template does NOT send welcome emails by default
+- `src/lib/email/resend.ts` is an optional integration stub
+- If implementing email routes, require auth and abuse protection (rate limit / idempotency)
+
+# Stripe Integration
+- `POST /api/stripe/webhook` is a starter stub after signature verification
+- Persist subscription/customer state in app-specific DB tables before production billing launch
+
+# Database & Migrations (CRITICAL)
+
+## After Schema Changes
+When you create/modify schema files in `lib/db/schema/`:
+
+### Step 1: Generate migration
+Run via Shell tool: `npm run db:generate`
+(Use required_permissions: ["network"] if needed)
+
+### Step 2: Add RLS policies (for NEW tables only)
+After migration is generated, open the new file in `supabase/migrations/` and ADD RLS policies:
+```sql
+ALTER TABLE {table} ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "{table}_select" ON {table} FOR SELECT USING (
+  EXISTS (SELECT 1 FROM tenant_users WHERE tenant_id = {table}.tenant_id AND user_id = auth.uid())
+);
+
+CREATE POLICY "{table}_insert" ON {table} FOR INSERT WITH CHECK (
+  EXISTS (SELECT 1 FROM tenant_users WHERE tenant_id = {table}.tenant_id AND user_id = auth.uid())
+);
+
+CREATE POLICY "{table}_update" ON {table} FOR UPDATE USING (
+  EXISTS (SELECT 1 FROM tenant_users WHERE tenant_id = {table}.tenant_id AND user_id = auth.uid())
+) WITH CHECK (
+  EXISTS (SELECT 1 FROM tenant_users WHERE tenant_id = {table}.tenant_id AND user_id = auth.uid())
+);
+
+CREATE POLICY "{table}_delete" ON {table} FOR DELETE USING (
+  EXISTS (SELECT 1 FROM tenant_users WHERE tenant_id = {table}.tenant_id AND user_id = auth.uid())
+);
+```
+
+### Step 3: Apply migration
+Run via Shell tool: `npm run db:migrate`
+(Use required_permissions: ["network"] if needed)
+
+## Multi-tenant Safety (ALWAYS)
+- Update or add RLS policies on every schema change that touches tenant-scoped tables
+- Ensure all queries and API routes filter by `tenantId` from `getActiveTenantId()`
+- Include `tenantId` in React Query keys and invalidate on tenant switch
+- Ensure middleware bypasses `/api/*` so webhooks and external callbacks are not auth-redirected
+
+## Tenant Isolation Verification (CRITICAL)
+- RLS is the mandatory authorization boundary for all tenant-scoped data
+- API authorization pattern is mandatory: `requireUser() -> withAuthDb(session.access_token) -> tenant-scoped query`
+- NEVER accept `tenant_id` or `user_id` from client for authorization decisions
+- After any tenant-related DB/API change, verify RLS policies in migration and add/update tenant-isolation smoke tests
+
+### Required smoke tests for tenant-scoped routes
+- Unauthenticated request returns `401`
+- Cross-tenant access is denied (`403` or `404`)
+- Same-tenant access succeeds
+
+## Workflow (Agent executes commands automatically)
+```
+1. Modify schema → lib/db/schema/{entity}.ts
+2. RUN: npm run db:generate (Shell tool)
+3. Add RLS to new migration (if new table)
+4. RUN: npm run db:migrate (Shell tool)
+```
+
+# Multi-tenancy
+
+All business entities require `tenant_id`. Architecture supports both:
+
+## Personal App (single-user)
+- One tenant created automatically on signup
+- Hide WorkspaceSwitcher in UI
+- User never sees multi-tenant features
+- Same code, just simplified UI
+
+## Workspace App (multi-tenant)
+- Users can create/join multiple workspaces
+- WorkspaceSwitcher visible in sidebar
+- Full multi-tenant experience
+
+**Under the hood both use the same `tenantId` pattern.**
+
+# Project Generation Workflow
+
+## Detecting User Intent
+
+When user says:
+- "I want to create/build [app name]"
+- "Make a [description] app"
+- "Add [feature] functionality"
+
+→ Follow `docs/project-generation.md`
+
+## Quick Steps
+
+1. Ask clarifying questions (entities, fields, app type)
+2. Create `project.prd.json` (see `project.prd.example.json`)
+3. Generate code following the guide
+4. Ask for Supabase credentials:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `DATABASE_URL`
+5. Help the user create/update `.env.local` with these values (copy from `.env.example` if needed)
+6. Run `npm install` (if not already)
+7. Run `npm run db:migrate`
+8. Run `npm run dev` and test in the browser
+9. Run `npm test` for critical smoke coverage
+
+## Important
+
+- Use documentation examples as reference implementation
+- Always filter by tenantId
+- Always add RLS policies
+- Follow existing patterns
+
+# App Initialization
+
+## Root Layout (`app/layout.tsx`)
+- Wraps with QueryClientProviderWrapper (all providers)
+- AppInitializer loads user → appStore
+
+## Admin Layout (`app/(admin)/layout.tsx`)
+- Server Component: requireUser() + withAuthDb()
+- Fetches tenants + resolves active tenant
+- AppStoreHydrator pushes to Zustand
+
+## Key Components
+- `AppInitializer` - Client: user → appStore
+- `AppStoreHydrator` - Server→Client tenants sync + cookie sync
+- `AccessControl` - Conditional render by permissions
+- `WorkspaceSwitcher` - Tenant switcher (hide for Personal App)
+
+# Cookies in Next.js 15 (CRITICAL)
+
+## Rules
+- NEVER modify cookies in Server Components (layouts, pages)
+- ONLY modify cookies in Route Handlers or Server Actions
+- Reading cookies is allowed anywhere
+
+## Lazy Sync Pattern
+When Server Component needs to "set" a cookie:
+1. Server Component reads/computes value (no write)
+2. Pass value to Client Component
+3. Client Component calls API on mount
+4. Route Handler sets the cookie
+
+## Tenant Cookie Example
+```
+Layout (Server Component)
+  → resolveActiveTenantId(db) [read-only]
+  → pass activeTenantId to AppStoreHydrator
+
+AppStoreHydrator (Client)
+  → useEffect on mount
+  → syncTenantCookie(activeTenantId)
+  → POST /api/tenants/sync sets cookie
+```
+
+## Key Files
+- `lib/tenants/activeTenant.ts` - cookie helpers
+- `lib/tenants/resolveActiveTenant.ts` - read-only resolution
+- `app/api/tenants/sync/route.ts` - cookie sync endpoint
+
+# Frontend Patterns
+
+## Toasts
+Use Zustand store for toasts:
+```typescript
+import { useAppStore } from '@/store/appStore';
+import { ToastType } from '@/utils/constants';
+
+const { showToast } = useAppStore();
+showToast('Message', ToastType.Success, 'Optional description');
+```
+
+## Hooks
+- `useIsMobile()` - responsive breakpoint detection
+- `useLocalStorage()` - persistent local storage
+- `useScroll()` - scroll position tracking
+- `useConfirm()` - async confirmation dialogs
+- Use React Query hooks with tenant-scoped query keys
+
+## Confirm Dialogs
+```typescript
+import { useConfirm } from '@/hooks/useConfirm';
+
+const confirm = useConfirm();
+
+const handleDelete = async () => {
+  const confirmed = await confirm({
+    title: 'Delete?',
+    description: 'This cannot be undone.',
+    confirmText: 'Delete',
+    destructive: true,
+  });
+  if (confirmed) { /* delete */ }
+};
+```
+
+# Dialogs Pattern
+
+Use `DialogManager` for all dialogs (not Dialog directly).
+
+## Opening dialogs
+```typescript
+import { openDialog, closeDialog } from '@/store/useDialogStore';
+
+openDialog('feature:create', { id: '123' });
+closeDialog();
+```
+
+## Adding new dialog
+1. Add a dialog id string in `utils/constants.ts` (or a typed dialog map)
+2. Create dialog component in `components/dialogs/`
+3. Add case to `DialogManager` switch
