@@ -9,7 +9,7 @@ function getSafeRelativePath(path: string | null, fallback: string): string {
 }
 
 export async function POST(req: Request) {
-  let nextPath = ROUTES.APP.DASHBOARD;
+  let nextPath: string = ROUTES.APP.DASHBOARD;
 
   try {
     const body = (await req.json()) as { nextPath?: string };
