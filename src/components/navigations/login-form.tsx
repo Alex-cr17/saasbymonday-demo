@@ -14,8 +14,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
-import { ROUTES } from '@/lib/helpers/routes';
+import { useCallback, useEffect, useState } from "react";
+import { ROUTES } from "@/lib/helpers/routes";
+import { withBasePath } from "@/lib/helpers/basePath";
 
 function getSafeRelativePath(path: string | null, fallback: string): string {
   if (!path) return fallback;
@@ -23,44 +24,24 @@ function getSafeRelativePath(path: string | null, fallback: string): string {
   return path;
 }
 
-function getOAuthErrorMessage(errorCode: string | null): string | null {
-  if (!errorCode) return null;
-  switch (errorCode) {
-    case "GOOGLE_AUTH_CANCELED_OR_FAILED":
-      return "Google login was canceled or failed. Please try again.";
-    case "GOOGLE_AUTH_CODE_MISSING":
-      return "Could not complete Google login. Please try again.";
-    case "GOOGLE_AUTH_EXCHANGE_FAILED":
-      return "Could not complete Google login. Please try again.";
-    default:
-      return "Google login failed. Please try again.";
-  }
-}
-
 export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRef<"div">) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [oauthError, setOauthError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [isDemoLoading, setIsDemoLoading] = useState(false);
+  const [autoDemoAttempted, setAutoDemoAttempted] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const redirectToParam = searchParams.get("redirectTo");
   const nextPath = getSafeRelativePath(redirectToParam, ROUTES.APP.DASHBOARD);
 
-  useEffect(() => {
-    const oauthErrorParam = searchParams.get("oauthError");
-    setOauthError(getOAuthErrorMessage(oauthErrorParam));
-  }, [searchParams]);
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     const supabase = createClient();
     setIsLoading(true);
     setError(null);
-    setOauthError(null);
 
     try {
       const { error } = await supabase.auth.signInWithPassword({
@@ -76,27 +57,38 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
     }
   };
 
-  const handleGoogleLogin = async () => {
-    const supabase = createClient();
-    setIsGoogleLoading(true);
+  const handleDemoLogin = useCallback(async () => {
+    setIsDemoLoading(true);
     setError(null);
-    setOauthError(null);
 
     try {
-      const callbackUrl = `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`;
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: callbackUrl,
-        },
+      const response = await fetch(withBasePath("/api/auth/demo-login"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nextPath }),
       });
-      if (error) throw error;
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.error?.message ?? "Demo login failed");
+      }
+
+      localStorage.setItem("demo_mode_started", "1");
+      router.push(payload.data.redirectTo ?? ROUTES.APP.DASHBOARD);
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "An error occurred");
     } finally {
-      setIsGoogleLoading(false);
+      setIsDemoLoading(false);
     }
-  };
+  }, [nextPath, router]);
+
+  useEffect(() => {
+    if (autoDemoAttempted) return;
+    const shouldAutoDemo = searchParams.get("demo") === "1";
+    if (!shouldAutoDemo) return;
+    setAutoDemoAttempted(true);
+    void handleDemoLogin();
+  }, [searchParams, autoDemoAttempted, handleDemoLogin]);
 
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
@@ -112,12 +104,11 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
             <div className="flex flex-col gap-6">
               <Button
                 type="button"
-                variant="outline"
                 className="w-full"
-                disabled={isGoogleLoading || isLoading}
-                onClick={handleGoogleLogin}
+                disabled={isLoading || isDemoLoading}
+                onClick={handleDemoLogin}
               >
-                {isGoogleLoading ? "Redirecting..." : "Continue with Google"}
+                {isDemoLoading ? "Signing in..." : "Try Demo"}
               </Button>
               <div className="relative text-center text-sm">
                 <span className="relative z-10 bg-background px-2 text-muted-foreground">
@@ -154,10 +145,12 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
                   onChange={(e) => setPassword(e.target.value)}
                 />
               </div>
-              {(oauthError || error) && (
-                <p className="text-sm text-red-500">{oauthError ?? error}</p>
-              )}
-              <Button type="submit" className="w-full" disabled={isLoading}>
+              {error && <p className="text-sm text-red-500">{error}</p>}
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={isLoading || isDemoLoading}
+              >
                 {isLoading ? "Logging in..." : "Login"}
               </Button>
             </div>

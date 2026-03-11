@@ -16,6 +16,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ROUTES } from '@/lib/helpers/routes';
+import { withBasePath } from "@/lib/helpers/basePath";
 
 export function SignUpForm({
                              className,
@@ -26,8 +27,19 @@ export function SignUpForm({
   const [repeatPassword, setRepeatPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const router = useRouter();
+
+  const trackDemoConvert = async (method: "email" | "google", userEmail?: string) => {
+    if (localStorage.getItem("demo_mode_started") !== "1") return;
+    try {
+      await fetch(withBasePath("/api/demo/convert"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method, email: userEmail }),
+      });
+      localStorage.removeItem("demo_mode_started");
+    } catch {}
+  };
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,6 +54,7 @@ export function SignUpForm({
     }
 
     try {
+      await trackDemoConvert("email", email);
       const { error } = await supabase.auth.signUp({
         email,
         password,
@@ -58,27 +71,6 @@ export function SignUpForm({
     }
   };
 
-  const handleGoogleSignUp = async () => {
-    const supabase = createClient();
-    setIsGoogleLoading(true);
-    setError(null);
-
-    try {
-      const callbackUrl = `${window.location.origin}/auth/callback?next=${encodeURIComponent(ROUTES.APP.DASHBOARD)}`;
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: callbackUrl,
-        },
-      });
-      if (error) throw error;
-    } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : "An error occurred");
-    } finally {
-      setIsGoogleLoading(false);
-    }
-  };
-
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card>
@@ -89,18 +81,9 @@ export function SignUpForm({
         <CardContent>
           <form onSubmit={handleSignUp}>
             <div className="flex flex-col gap-6">
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full"
-                disabled={isGoogleLoading || isLoading}
-                onClick={handleGoogleSignUp}
-              >
-                {isGoogleLoading ? "Redirecting..." : "Continue with Google"}
-              </Button>
               <div className="relative text-center text-sm">
                 <span className="relative z-10 bg-background px-2 text-muted-foreground">
-                  or continue with email
+                  continue with email
                 </span>
                 <div className="absolute inset-0 top-1/2 -z-0 border-t" />
               </div>

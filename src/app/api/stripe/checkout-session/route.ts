@@ -9,6 +9,7 @@ import {
 import { getActiveTenantId } from '@/lib/tenants/activeTenant';
 import { createCheckoutSessionSchema } from '@/lib/validation/stripeSchemas';
 import Stripe from 'stripe';
+import { isDemoUserEmail } from '@/lib/auth/demoUser';
 
 export const runtime = 'nodejs';
 
@@ -39,6 +40,9 @@ export async function POST(req: Request) {
 
   if (!user || !session) {
     return fail('UNAUTHENTICATED', 'Authentication required', 401);
+  }
+  if (isDemoUserEmail(user.email)) {
+    return fail('FORBIDDEN', 'Demo mode is read-only for billing actions.', 403);
   }
 
   const activeTenantId = await getActiveTenantId();

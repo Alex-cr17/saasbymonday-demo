@@ -28,14 +28,12 @@ export async function HeroSection() {
             </Link>
           ) : (
             <>
-              {/* Primary CTA goes to signup in the app area */}
               <Link
-                href="/auth/signup"
+                href="/auth/login?demo=1"
                 className="inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow hover:opacity-90"
               >
-                Get started
+                Try demo
               </Link>
-              {/* Secondary CTA for existing users */}
               <Link
                 href="/auth/login"
                 className="inline-flex items-center rounded-md border px-4 py-2 text-sm font-medium"

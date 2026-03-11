@@ -8,10 +8,12 @@ import { withAuthDb } from '@/lib/db/withAuthDb';
 import { AppStoreHydrator } from '@/components/navigations/app-store-hydrator';
 import { getTenants } from '@/lib/db/queries/tenants';
 import { resolveActiveTenantId } from '@/lib/tenants/resolveActiveTenant';
+import { isDemoUserEmail } from '@/lib/auth/demoUser';
 
 export default async function AdminServerLayout({ children }: Readonly<PropsWithChildren>) {
   const { session } = await requireUser().catch(() => redirect('/auth/login'));
   if (!session) redirect('/auth/login');
+  const isDemoMode = isDemoUserEmail(session.user.email);
 
   const { tenants, activeTenantId } = await withAuthDb(session.access_token, async (db) => {
     const tenants = await getTenants(db, session.user.id);
@@ -27,6 +29,11 @@ export default async function AdminServerLayout({ children }: Readonly<PropsWith
         <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
+          {isDemoMode ? (
+            <span className="ml-auto rounded-md bg-amber-100 px-2 py-1 text-xs font-medium text-amber-900">
+              Demo mode
+            </span>
+          ) : null}
         </header>
         <main className="flex flex-1 flex-col gap-4 p-4">{children}</main>
       </SidebarInset>
