@@ -8,15 +8,22 @@ import { syncTenantCookie } from '@/lib/api/client/tenants';
 type Props = {
   tenants: UITenant[];
   activeTenantId: string | null;
+  currentUser: {
+    id: string;
+    email: string;
+    displayName: string;
+  } | null;
 };
 
-export function AppStoreHydrator({ tenants, activeTenantId }: Props) {
+export function AppStoreHydrator({ tenants, activeTenantId, currentUser }: Props) {
   const setTenants = useAppStore((s) => s.setTenants);
   const setActiveTenant = useAppStore((s) => s.setActiveTenant);
+  const setCurrentUser = useAppStore((s) => s.setCurrentUser);
   const setIsHydrated = useAppStore((s) => s.setIsHydrated);
   const didSync = useRef(false);
 
   useEffect(() => {
+    setCurrentUser(currentUser);
     setTenants(tenants);
 
     if (activeTenantId) {
@@ -30,7 +37,7 @@ export function AppStoreHydrator({ tenants, activeTenantId }: Props) {
     }
 
     setIsHydrated(true);
-  }, [tenants, activeTenantId, setTenants, setActiveTenant, setIsHydrated]);
+  }, [currentUser, tenants, activeTenantId, setCurrentUser, setTenants, setActiveTenant, setIsHydrated]);
 
   return null;
 }
