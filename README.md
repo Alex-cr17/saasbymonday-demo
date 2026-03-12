@@ -10,7 +10,7 @@ Production-ready multi-tenant SaaS template with Next.js 15, Supabase Auth, Post
 2. Open `Project Settings -> API` in Supabase dashboard.
 3. Copy required values to `.env.local`:
    - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
    - `DATABASE_URL`
    - Optional (custom email integration): `RESEND_API_KEY`, `RESEND_FROM_EMAIL`
    - Optional (Stripe example): `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID`
@@ -28,7 +28,7 @@ npm install
 
 # Set up environment variables
 cp .env.example .env.local
-# Fill .env.local with Supabase URL and anon key
+# Fill .env.local with Supabase URL and publishable key
 
 # Run database migrations
 npm run db:migrate
@@ -42,7 +42,7 @@ npm run dev
 - [ ] `npm install`
 - [ ] `cp .env.example .env.local`
 - [ ] Set `NEXT_PUBLIC_SUPABASE_URL` in `.env.local`
-- [ ] Set `NEXT_PUBLIC_SUPABASE_ANON_KEY` in `.env.local`
+- [ ] Set `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in `.env.local`
 - [ ] Set `DATABASE_URL` in `.env.local`
 - [ ] (Optional) Set Resend keys for custom email integration
 - [ ] (Optional) Set Stripe keys for billing example

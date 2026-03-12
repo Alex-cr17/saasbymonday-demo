@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { isAuthRoute, isPublicRoute, ROUTES } from '@/lib/helpers/routes';
-import { stripBasePath, withBasePath } from "@/lib/helpers/basePath";
 
 /**
  * Middleware to sync Supabase session cookies and enforce auth rules:
@@ -17,7 +16,7 @@ import { stripBasePath, withBasePath } from "@/lib/helpers/basePath";
  */
 export async function updateSession(request: NextRequest) {
   const url = request.nextUrl.clone();
-  const pathname = stripBasePath(url.pathname);
+  const pathname = url.pathname;
 
   // API routes are validated at route level (requireUser, webhook signatures, etc).
   // Never redirect API callers to login from middleware.
@@ -57,7 +56,7 @@ export async function updateSession(request: NextRequest) {
   if (isPublicRoute(pathname)) {
     // Authenticated user should not access auth pages
     if (user && isAuthRoute(pathname)) {
-      return NextResponse.redirect(new URL(withBasePath(ROUTES.APP.ROOT), url));
+      return NextResponse.redirect(new URL(ROUTES.APP.ROOT, url));
     }
 
     return response;
@@ -65,7 +64,7 @@ export async function updateSession(request: NextRequest) {
 
   // Protected routes
   if (!user) {
-    const loginUrl = new URL(withBasePath(ROUTES.AUTH.LOGIN), url);
+    const loginUrl = new URL(ROUTES.AUTH.LOGIN, url);
     loginUrl.searchParams.set("redirectTo", pathname + url.search);
     return NextResponse.redirect(loginUrl);
   }

@@ -15,8 +15,7 @@ import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { ROUTES } from "@/lib/helpers/routes";
-import { withBasePath } from "@/lib/helpers/basePath";
+import { ROUTES } from '@/lib/helpers/routes';
 
 function getSafeRelativePath(path: string | null, fallback: string): string {
   if (!path) return fallback;
@@ -62,7 +61,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
     setError(null);
 
     try {
-      const response = await fetch(withBasePath("/api/auth/demo-login"), {
+      const response = await fetch("/api/auth/demo-login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ nextPath }),

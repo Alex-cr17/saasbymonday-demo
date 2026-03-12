@@ -429,7 +429,7 @@ Ask user for:
 I need your Supabase credentials:
 
 1. NEXT_PUBLIC_SUPABASE_URL=
-2. NEXT_PUBLIC_SUPABASE_ANON_KEY=
+2. NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 3. DATABASE_URL=
 
 Create .env.local with these values?

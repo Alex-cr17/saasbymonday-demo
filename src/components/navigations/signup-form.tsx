@@ -16,7 +16,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ROUTES } from '@/lib/helpers/routes';
-import { withBasePath } from "@/lib/helpers/basePath";
 
 export function SignUpForm({
                              className,
@@ -32,7 +31,7 @@ export function SignUpForm({
   const trackDemoConvert = async (method: "email" | "google", userEmail?: string) => {
     if (localStorage.getItem("demo_mode_started") !== "1") return;
     try {
-      await fetch(withBasePath("/api/demo/convert"), {
+      await fetch("/api/demo/convert", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ method, email: userEmail }),

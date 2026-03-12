@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ROUTES } from "@/lib/helpers/routes";
 import { createClient } from "@/lib/supabase/server";
-import { withBasePath } from "@/lib/helpers/basePath";
 
 function getSafeRelativePath(path: string | null, fallback: string): string {
   if (!path) return fallback;
@@ -13,7 +12,7 @@ function buildLoginRedirectUrl(
   request: NextRequest,
   options?: { redirectTo?: string; oauthError?: string },
 ) {
-  const loginUrl = new URL(withBasePath(ROUTES.AUTH.LOGIN), request.url);
+  const loginUrl = new URL(ROUTES.AUTH.LOGIN, request.url);
 
   if (options?.redirectTo) {
     loginUrl.searchParams.set("redirectTo", options.redirectTo);
@@ -57,5 +56,5 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  return NextResponse.redirect(new URL(withBasePath(nextPath), request.url));
+  return NextResponse.redirect(new URL(nextPath, request.url));
 }
